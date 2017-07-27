@@ -19,6 +19,8 @@ from MAVProxy.modules.lib import textconsole
 from MAVProxy.modules.lib import rline
 from MAVProxy.modules.lib import mp_module
 from MAVProxy.modules.lib import dumpstacks
+from MAVProxy.modules.mavproxy_param import ParamState
+from modules.socket_multicast import SocketMulticast
 
 # adding all this allows pyinstaller to build a working windows executable
 # note that using --hidden-import does not work for these modules
@@ -749,6 +751,7 @@ def periodic_tasks():
 
 def main_loop():
     '''main processing loop'''
+    # TODO main_loop
     if not mpstate.status.setup_mode and not opts.nowait:
         for master in mpstate.mav_master:
             send_heartbeat(master)
@@ -895,7 +898,21 @@ def set_mav_version(mav10, mav20, autoProtocol, mavversionArg):
     else:
         mavversion = None
 
+
+plane_code_set = set()
+plane_code = "1"
+plane_num = 2
+def on_data(data):
+    plane_code_set.add(data)
+
+
 if __name__ == '__main__':
+    
+    socketMulticast = SocketMulticast('224.1.1.1', 5000)
+    socketMulticast.init_sender()
+    socketMulticast.init_receive(on_data)
+    socketMulticast.start()
+
     from optparse import OptionParser
     parser = OptionParser("mavproxy.py [options]")
 
@@ -1134,6 +1151,17 @@ if __name__ == '__main__':
 
     # use main program for input. This ensures the terminal cleans
     # up on exit
+    ParamState.is_ok = False
+    # while not ParamState.is_ok:
+    #     # print(ParamState.is_ok)
+    #     pass
+
+    time.sleep(30)
+    socketMulticast.send(plane_code + ":ready!")
+    while(len(plane_code_set) < plane_num):
+        time.sleep(1)
+        pass
+    mpstate.input_queue.put("arm throttle")
     while (mpstate.status.exit != True):
         try:
             if opts.daemon:
